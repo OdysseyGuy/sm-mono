@@ -1,0 +1,8 @@
+# virtual environment
+.venv/
+
+# python cache
+__pycache__/
+
+# firebase service account
+serviceAccount.json
