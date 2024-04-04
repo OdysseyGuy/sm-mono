@@ -45,6 +45,8 @@ const char *mqtt_units_sub_topic = "energy/asfas3242d2/units";
 //----------------------------------------------------------------------------------
 
 unsigned long lastUpload;
+unsigned long lastLimitSet; // epoch timestamp for last set limit time
+const unsigned int limitSetDelay = 3600 * 1000; // 24 hr
 const unsigned int uploadThrottle = 900; // 900 ms
 
 double voltage_usage, current_usage, active_power, active_energy;
@@ -52,6 +54,8 @@ double frequency, power_factor, over_power_alarm;
 
 // just for debug
 float energy = 0;
+
+const char* limitEndpoint = "";
 
 //----------------------------------------------------------------------------------
 // connectToWifi
@@ -166,13 +170,16 @@ void setup()
     node.begin(1, pzem);
     Serial.println("Start PZEM");
 
-    // not needed as we are not going to subscribe to any topic
-    // pubsubClient.setCallback(callback);
+    // we are going to subscribe to the limit set topic
+    pubsubClient.setCallback(callback);
     pubsubClient.setServer(mqtt_server, mqtt_port);
 
     // initialize the time clinet and set it to IST
     timeClient.begin();
     timeClient.setTimeOffset(19800); // IST time offset in seconds
+
+    // lets query the limit once at startup
+    wifiClient.
 }
 
 //----------------------------------------------------------------------------------
@@ -219,6 +226,7 @@ void loop()
     char mqtt_message[256];
     serializeJson(doc, mqtt_message);
 
+    // upload the readings every second
     unsigned long currentTime = millis();
     if ((currentTime - lastUpload) >= uploadThrottle)
     {
