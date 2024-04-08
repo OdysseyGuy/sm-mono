@@ -1,23 +1,15 @@
 const express = require("express");
+const cors = require("cors");
 const app = express();
 
-const fs = require("fs");
-const serviceAccount = JSON.parse(fs.readFileSync("serviceaccount.json"));
+app.use(cors());
+app.use(express.json());
+app.use("/api", require("./route"));
 
-var firebase = require("firebase-admin");
-firebase.initializeApp({
-  credential: firebase.credential.cert(serviceAccount),
+app.get("*", function (req, res) {
+  res.status(404).send("404 Not Found");
 });
 
-app.get("/", (req, res) => {
-  res.send("Hello World!");
-});
-
-// endpoint to set the limit of the customer
-app.post("/limit", (req, res) => {
-  res.send("Hello World!");
-});
-
-app.listen(3000, () => {
+app.listen(8080, function () {
   console.log("Server is running on port 3000");
 });

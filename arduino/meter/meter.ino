@@ -26,7 +26,7 @@ NTPClient timeClient(wifiUdp, "pool.ntp.org");
 // WiFi credentials.
 
 const char *ssid = "twin";
-const char *password = "gogol039";
+const char *password = "gogowifi";
 
 //----------------------------------------------------------------------------------
 // mqtt
@@ -36,7 +36,7 @@ const char *mqtt_server = "broker.emqx.io";
 const int mqtt_port = 1883;
 
 const char *sensorId = "asfas3242d2";
-const char *mqtt_pub_topic = "energy/asfas3242d2";
+const char *mqtt_pub_topic = "meter/asfas3242d2";
 
 // subscribe to this topic so that when ever there is update to
 // daily consumeable units the sensor gets updated about the new unit
@@ -57,9 +57,11 @@ float energy = 0;
 
 const char* limitEndpoint = "";
 
+float balance = 0.0f;
+
 //----------------------------------------------------------------------------------
 // connectToWifi
-// Connect to the wifi using the credentials provided.
+// Connect to the WiFi using the credentials provided.
 
 void connectToWifi()
 {
@@ -84,7 +86,7 @@ void connectToWifi()
 
 //----------------------------------------------------------------------------------
 // reconnect
-// Call this when we want to reconnect to the mqtt broker.
+// Call this when we want to reconnect to the MQTT broker.
 
 void reconnect()
 {
@@ -179,7 +181,7 @@ void setup()
     timeClient.setTimeOffset(19800); // IST time offset in seconds
 
     // lets query the limit once at startup
-    wifiClient.
+    // wifiClient.
 }
 
 //----------------------------------------------------------------------------------
@@ -209,7 +211,7 @@ void loop()
     //  }
 
     // we would actully get this value from pzem
-    float voltage = float_rand(238,249);
+    float voltage = float_rand(220,225);
     float frequency = float_rand(50,51);
     float power = float_rand(0.00003,0.00004);
     energy = energy + power;
@@ -234,7 +236,7 @@ void loop()
         lastUpload = currentTime;
     }
 
-    delay(500);
+    delay(100);
 }
 
 //----------------------------------------------------------------------------------
