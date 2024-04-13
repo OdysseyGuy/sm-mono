@@ -13,7 +13,7 @@ firebase.initializeApp({
   credential: firebase.credential.cert(serviceAccount),
 });
 
-// const firestore = firebase.firestore();
+const firestore = firebase.firestore();
 
 const client = mqtt.connect(connectUrl, {
   clientId,
@@ -22,6 +22,7 @@ const client = mqtt.connect(connectUrl, {
   reconnectPeriod: 1000,
 });
 
+// topic to subscribe to
 let topic = "meter/#";
 
 client.on("connect", function () {
@@ -54,13 +55,14 @@ client.on("message", function (topic, message) {
     sensorId: sensorId,
     timestamp: objMessage['timestamp'],
     voltage: objMessage['voltage'],
+    frequency: objMessage['frequency'],
     current: objMessage['current'],
     energy: objMessage['energy'],
     power: objMessage['power'],
+    powerFactor: objMessage['powerFactor'],
   }
 
-  console.log(payload);
-  // firestore.collection("sensor_data").add(payload);
+  firestore.collection("sensor_data").add(payload);
 });
 
 client.on("close", function () {

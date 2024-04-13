@@ -38,10 +38,6 @@ const int mqtt_port = 1883;
 const char *sensorId = "asfas3242d2";
 const char *mqtt_pub_topic = "meter/asfas3242d2";
 
-// subscribe to this topic so that when ever there is update to
-// daily consumeable units the sensor gets updated about the new unit
-const char *mqtt_units_sub_topic = "energy/asfas3242d2/units";
-
 //----------------------------------------------------------------------------------
 
 unsigned long lastUpload;
@@ -49,15 +45,16 @@ unsigned long lastLimitSet; // epoch timestamp for last set limit time
 const unsigned int limitSetDelay = 3600 * 1000; // 24 hr
 const unsigned int uploadThrottle = 900; // 900 ms
 
-double voltage_usage, current_usage, active_power, active_energy;
-double frequency, power_factor, over_power_alarm;
+//----------------------------------------------------------------------------------
+// electrical parameters
 
-// just for debug
-float energy = 0;
+double voltage, current, power, energy;
+double frequency, power_factor;
 
-const char* limitEndpoint = "";
+//----------------------------------------------------------------------------------
 
-float balance = 0.0f;
+// modbus result
+uint8_t result;
 
 //----------------------------------------------------------------------------------
 // connectToWifi
@@ -125,9 +122,6 @@ void callback(char *topic, byte *payload, unsigned int length)
     {
         Serial.print((char)payload[i]);
     }
-
-    Serial.println();
-    Serial.println();
 }
 
 //----------------------------------------------------------------------------------
@@ -140,16 +134,6 @@ void publishMessage(const char *topic, String payload, boolean retained)
     {
         Serial.println("Message publised [" + String(topic) + "]: " + payload);
     }
-}
-
-//----------------------------------------------------------------------------------
-// float_rand
-// Use to generate random floating point numbers.
-
-float float_rand(float min, float max)
-{
-    float scale = rand() / (float)RAND_MAX;
-    return min + scale * (max - min);
 }
 
 //----------------------------------------------------------------------------------
@@ -181,7 +165,6 @@ void setup()
     timeClient.setTimeOffset(19800); // IST time offset in seconds
 
     // lets query the limit once at startup
-    // wifiClient.
 }
 
 //----------------------------------------------------------------------------------
@@ -198,32 +181,38 @@ void loop()
     pubsubClient.loop();
     timeClient.update();
 
-    // real pzem values
-    //  result = node.readInputRegisters(0x0000, 10);
-    //  if (result == node.ku8MBSuccess)
-    //  {
-    //    voltage_usage = (node.getResponseBuffer(0x00) / 10.0f); // V
-    //    current_usage = (node.getResponseBuffer(0x01) / 1000.000f); // A
-    //    active_power = (node.getResponseBuffer(0x03) / 10.0f); // W
-    //    active_energy = (node.getResponseBuffer(0x05) / 1000.0f); // kWh
-    //    frequency = (node.getResponseBuffer(0x07) / 10.0f); // Hz
-    //    power_factor = (node.getResponseBuffer(0x08) / 100.0f);
-    //  }
-
-    // we would actully get this value from pzem
-    float voltage = float_rand(220,225);
-    float frequency = float_rand(50,51);
-    float power = float_rand(0.00003,0.00004);
-    energy = energy + power;
-    float current = float_rand(2,3);
+    result = node.readInputRegisters(0x0000, 10);
+    if (result == node.ku8MBSuccess)
+    {
+        voltage = (node.getResponseBuffer(0x00) / 10.0f); // V
+        current = (node.getResponseBuffer(0x01) / 1000.000f); // A
+        active_power = (node.getResponseBuffer(0x03) / 10.0f); // W
+        active_energy = (node.getResponseBuffer(0x05)/1000.0f); // kWh
+        frequency = (node.getResponseBuffer(0x07) / 10.0f); // Hz
+        power_factor = (node.getResponseBuffer(0x08) / 100.0f);
+    }
+    
+    Serial.print("Voltage: ");
+    Serial.print(voltage_usage);
+    Serial.print(" | Frequency: ");
+    Serial.print(frequency);
+    Serial.print(" | Current: ");
+    Serial.print(current_usage);
+    Serial.print(" | Power: ");
+    Serial.print(active_power);
+    Serial.print(" | Energy: ");
+    Serial.print(active_energy,3);
+    Serial.print(" | Power Factor: ");
+    Serial.println(power_factor);
 
     DynamicJsonDocument doc(1024);
     doc["timestamp"] = timeClient.getEpochTime();
     doc["voltage"] = voltage;
     doc["current"] = current;
-    doc["energy"] = energy;
-    doc["power"] = power;
+    doc["energy"] = active_energy;
+    doc["power"] = active_power;
     doc["frequency"] = frequency;
+    doc["powerFactor"] = power_factor;
 
     char mqtt_message[256];
     serializeJson(doc, mqtt_message);

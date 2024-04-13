@@ -2,7 +2,6 @@ import {
   Alert,
   Button,
   FormControl,
-  FormLabel,
   Grid,
   Input,
   Stack,
@@ -31,20 +30,19 @@ const Register = () => {
     }).then((response) => {
       if (response.status == HttpStatusCode.Ok) {
         setSuccess(true);
-        console.log("registration success");
       }
     });
   };
 
   return (
     <>
-      <Typography level="h2">Registration</Typography>
-      <Typography level="body-md" sx={{ mb: 2 }}>
+      <Typography level="h3">Registration</Typography>
+      <Typography sx={{ mb: 2 }}>
         Register a new consumer. Registration is required to subscribe to a
         plan.
       </Typography>
       <form>
-        <Stack spacing={2}>
+        <Stack spacing={2} sx={{ mb: 2 }}>
           <Grid
             container
             spacing={2}
@@ -79,7 +77,6 @@ const Register = () => {
                 />
               </FormControl>
             </Grid>
-
             <Grid>
               <FormControl>
                 <Input
@@ -100,7 +97,6 @@ const Register = () => {
                       right: 0,
                       bottom: "-2px",
                       top: "unset",
-                      transition: "transform .15s cubic-bezier(0.1,0.9,0.2,1)",
                       borderRadius: 0,
                     },
                     "&:focus-within::before": {

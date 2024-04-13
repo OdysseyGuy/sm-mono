@@ -1,13 +1,15 @@
 import React from "react";
-import Home from "./pages/Home";
 import "./App.css";
+import Home from "./pages/Home";
+import { CssVarsProvider } from "@mui/joy";
+import theme from "./theme";
 
 const App = () => {
   return (
-    <div>
+    <CssVarsProvider theme={theme}>
       <Home />
-    </div>
+    </CssVarsProvider>
   );
-}
+};
 
 export default App;
