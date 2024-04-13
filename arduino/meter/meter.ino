@@ -7,13 +7,19 @@
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 #include <WifiClientSecure.h>
-#include <ModbusMaster.h>
 #include <SoftwareSerial.h>
+#include <PZEM004Tv30.h>
+#include <SimpleTimer.h>
+
+//----------------------------------------------------------------------------------
+// Build Configuration
+
+#define RESET_ENERGY_AT_STARTUP 0
 
 //----------------------------------------------------------------------------------
 
-SoftwareSerial pzem(D5, D6);
-ModbusMaster node;
+SoftwareSerial pzemSerial(D5, D6);
+PZEM004Tv30 pzem(pzemSerial);
 
 WiFiClient wifiClient;
 PubSubClient pubsubClient(wifiClient);
@@ -25,8 +31,8 @@ NTPClient timeClient(wifiUdp, "pool.ntp.org");
 // wifi
 // WiFi credentials.
 
-const char *ssid = "twin";
-const char *password = "gogowifi";
+const char *ssid = "Rishi";
+const char *password = "5688b6d56682";
 
 //----------------------------------------------------------------------------------
 // mqtt
@@ -39,22 +45,19 @@ const char *sensorId = "asfas3242d2";
 const char *mqtt_pub_topic = "meter/asfas3242d2";
 
 //----------------------------------------------------------------------------------
+// Timer
 
-unsigned long lastUpload;
-unsigned long lastLimitSet; // epoch timestamp for last set limit time
-const unsigned int limitSetDelay = 3600 * 1000; // 24 hr
-const unsigned int uploadThrottle = 900; // 900 ms
+SimpleTimer timer(1000); // run every 1 sec
 
 //----------------------------------------------------------------------------------
-// electrical parameters
+// Electrical Parameters
 
-double voltage, current, power, energy;
-double frequency, power_factor;
+float voltage, current, power, energy, frequency, pf;
 
 //----------------------------------------------------------------------------------
+// JSON file for MQTT
 
-// modbus result
-uint8_t result;
+DynamicJsonDocument doc(1024);
 
 //----------------------------------------------------------------------------------
 // connectToWifi
@@ -122,6 +125,9 @@ void callback(char *topic, byte *payload, unsigned int length)
     {
         Serial.print((char)payload[i]);
     }
+
+    Serial.println();
+    Serial.println();
 }
 
 //----------------------------------------------------------------------------------
@@ -132,7 +138,7 @@ void publishMessage(const char *topic, String payload, boolean retained)
 {
     if (pubsubClient.publish(topic, payload.c_str(), true))
     {
-        Serial.println("Message publised [" + String(topic) + "]: " + payload);
+        //        Serial.println("Message publised [" + String(topic) + "]: " + payload);
     }
 }
 
@@ -149,12 +155,7 @@ void setup()
     connectToWifi();
 
     // initialize the pzem serial port
-    pzem.begin(9600);
     Serial.println("Start PZEM serial");
-
-    // initialize the pzem module 
-    node.begin(1, pzem);
-    Serial.println("Start PZEM");
 
     // we are going to subscribe to the limit set topic
     pubsubClient.setCallback(callback);
@@ -163,6 +164,10 @@ void setup()
     // initialize the time clinet and set it to IST
     timeClient.begin();
     timeClient.setTimeOffset(19800); // IST time offset in seconds
+
+#if RESET_ENERGY_AT_STARTUP
+    pzem.resetEnergy();
+#endif
 
     // lets query the limit once at startup
 }
@@ -173,59 +178,85 @@ void setup()
 
 void loop()
 {
+    // make sure we are connected to the MQTT broker
     if (!pubsubClient.connected())
     {
         reconnect();
     }
-    
+
     pubsubClient.loop();
     timeClient.update();
 
-    result = node.readInputRegisters(0x0000, 10);
-    if (result == node.ku8MBSuccess)
-    {
-        voltage = (node.getResponseBuffer(0x00) / 10.0f); // V
-        current = (node.getResponseBuffer(0x01) / 1000.000f); // A
-        active_power = (node.getResponseBuffer(0x03) / 10.0f); // W
-        active_energy = (node.getResponseBuffer(0x05)/1000.0f); // kWh
-        frequency = (node.getResponseBuffer(0x07) / 10.0f); // Hz
-        power_factor = (node.getResponseBuffer(0x08) / 100.0f);
-    }
-    
-    Serial.print("Voltage: ");
-    Serial.print(voltage_usage);
-    Serial.print(" | Frequency: ");
-    Serial.print(frequency);
-    Serial.print(" | Current: ");
-    Serial.print(current_usage);
-    Serial.print(" | Power: ");
-    Serial.print(active_power);
-    Serial.print(" | Energy: ");
-    Serial.print(active_energy,3);
-    Serial.print(" | Power Factor: ");
-    Serial.println(power_factor);
+    voltage = pzem.voltage();
+    current = pzem.current();
+    power = pzem.power();
+    energy = pzem.energy();
+    frequency = pzem.frequency();
+    pf = pzem.pf();
 
-    DynamicJsonDocument doc(1024);
+    if (isnan(voltage))
+    {
+        Serial.println("Error reading voltage");
+    }
+    else if (isnan(current))
+    {
+        Serial.println("Error reading current");
+    }
+    else if (isnan(power))
+    {
+        Serial.println("Error reading power");
+    }
+    else if (isnan(energy))
+    {
+        Serial.println("Error reading energy");
+    }
+    else if (isnan(frequency))
+    {
+        Serial.println("Error reading frequency");
+    }
+    else if (isnan(pf))
+    {
+        Serial.println("Error reading power factor");
+    }
+    else
+    {
+        Serial.print("Voltage: ");
+        Serial.print(voltage);
+        Serial.print("V");
+        Serial.print(" | Current: ");
+        Serial.print(current);
+        Serial.print("A");
+        Serial.print(" | Power: ");
+        Serial.print(power);
+        Serial.print("W");
+        Serial.print(" | Energy: ");
+        Serial.print(energy, 3);
+        Serial.print("kWh");
+        Serial.print(" | Frequency: ");
+        Serial.print(frequency, 1);
+        Serial.print("Hz");
+        Serial.print(" | PF: ");
+        Serial.println(pf);
+    }
+
     doc["timestamp"] = timeClient.getEpochTime();
     doc["voltage"] = voltage;
     doc["current"] = current;
-    doc["energy"] = active_energy;
-    doc["power"] = active_power;
+    doc["energy"] = energy;
+    doc["power"] = power;
     doc["frequency"] = frequency;
-    doc["powerFactor"] = power_factor;
+    doc["powerFactor"] = pf;
 
     char mqtt_message[256];
     serializeJson(doc, mqtt_message);
 
-    // upload the readings every second
-    unsigned long currentTime = millis();
-    if ((currentTime - lastUpload) >= uploadThrottle)
+    if (timer.isReady())
     {
         publishMessage(mqtt_pub_topic, mqtt_message, true);
-        lastUpload = currentTime;
+        timer.reset();
     }
 
-    delay(100);
+    delay(50);
 }
 
 //----------------------------------------------------------------------------------
