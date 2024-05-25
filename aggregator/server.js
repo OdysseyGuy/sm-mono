@@ -26,8 +26,6 @@ function onMqttMessage(topic, message) {
   // get the sensor id from topic
   let sensorId = topic.split("/")[1];
 
-  // console.log(objMessage);
-
   var utcSeconds = parseInt(objMessage["timestamp"]);
   var date = new Date(0);
   date.setUTCSeconds(utcSeconds);
@@ -44,10 +42,7 @@ function onMqttMessage(topic, message) {
     powerFactor: parseFloat(objMessage["powerFactor"]),
   };
 
-  // console.log(reading);
-  // console.log(readingsDoc)
   readingsDoc.insertOne(reading);
-  // firestore.collection("sensor_data").add(payload);
 }
 
 async function main() {
@@ -58,15 +53,6 @@ async function main() {
   } catch (error) {
     console.error("Error connecting to MongoDB", error);
   }
-
-  // await mongoose.connect()
-
-  // const serviceAccount = JSON.parse(fs.readFileSync("serviceaccount.json"));
-  // firebase.initializeApp({
-  //   credential: firebase.credential.cert(serviceAccount),
-  // });
-
-  // firestore = firebase.firestore();
 
   client = mqtt.connect(connectUrl, {
     clientId,
