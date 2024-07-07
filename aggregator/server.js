@@ -9,7 +9,6 @@ const kafka = new Kafka({
   clientId: KAFKA_CLIENT_ID,
   brokers: KAFKA_BROKERS,
 });
-
 const producer = kafka.producer();
 const server = net.createServer();
 
@@ -50,7 +49,7 @@ async function main() {
     socket.on("data", async (data) => {
       try {
         const rawBuffer = Buffer.from(data, "binary");
-        const parsedData = parseTCPPacket(buffer);
+        const parsedData = parseTCPPacket(rawBuffer);
         await producer.send({
           topic: KAFKA_TOPIC,
           messages: [{ value: JSON.stringify(parsedData) }],
