@@ -1,64 +1,82 @@
-const mqtt = require("mqtt");
-const { MongoClient } = require("mongodb");
+const net = require("net");
+const { Kafka } = require("kafkajs");
 
-// constants
-const MQTT_BROKER_PROTOCOL = "mqtt";
-const MQTT_BROKER_HOST = "broker.emqx.io";
-const MQTT_BROKER_PORT = "1883";
-const MQTT_BROKER_CLIENTID = `mqtt_${Math.random().toString(16).slice(3)}`;
-const MQTT_BROKER_CONNECT_URL = `${MQTT_BROKER_PROTOCOL}://${MQTT_BROKER_HOST}:${MQTT_BROKER_PORT}`;
-const MONGODB_URI = "mongodb://127.0.0.1:27017";
+const KAFKA_BROKERS = process.env.KAFKA_BROKERS || "localhost:9092";
+const KAFKA_TOPIC = process.env.KAFKA_TOPIC || "meter-readings";
+const KAFKA_CLIENT_ID = process.env.KAFKA_CLIENT_ID || "tcp-to-kafka";
 
-let db;
-let readingsDocument;
+const kafka = new Kafka({
+  clientId: KAFKA_CLIENT_ID,
+  brokers: KAFKA_BROKERS,
+});
 
-function onMqttMessage(topic, message) {
-  // log to console that we received a message
-  // this is just for debugging purposes
-  // We can remove this line in production
-  console.log("Received message from MQTT Broker", topic);
+const producer = kafka.producer();
+const server = net.createServer();
 
-  // process the message
-  let strMessage = message.toString();
-  let objMessage = JSON.parse(strMessage);
+function parseTCPPacket(buffer) {
+  if (buffer.length < 16) {
+    throw new Error("Invalid packet length");
+  }
 
-  // get the sensor id from topic
-  let sensorId = topic.split("/")[1];
+  const timestamp = buffer.readUInt32LE(0);
+  const meterId = buffer.readUInt32LE(4);
+  const voltage = (buffer.readUInt16LE(8) / 100).toFixed(2);
+  const current = (buffer.readUInt16LE(10) / 100).toFixed(2);
+  const power = (buffer.readUInt32LE(12) / 100).toFixed(2);
+  const energy = (buffer.readUInt32LE(16) / 100).toFixed(2);
 
-  var utcSeconds = parseInt(objMessage["timestamp"]);
-  var date = new Date(0);
-  date.setUTCSeconds(utcSeconds);
-  let reading = {
-    timestamp: date,
-    metadata: {
-      sensorId: sensorId.toString(),
-    },
-    voltage: parseFloat(objMessage["voltage"]),
-    frequency: parseFloat(objMessage["frequency"]),
-    current: parseFloat(objMessage["current"]),
-    energy: parseFloat(objMessage["energy"]),
-    power: parseFloat(objMessage["power"]),
-    powerFactor: parseFloat(objMessage["powerFactor"]),
+  return {
+    timestamp,
+    meterId,
+    voltage,
+    current,
+    power,
+    energy,
   };
-
-  // TODO: handle error if insert fails
-  readingsDocument.insertOne(reading);
 }
 
 async function main() {
-  // first connect to mongodb database
-  // TODO: handle error if connection fails
-  const mongoClient = new MongoClient(MONGODB_URI);
-  try {
-    await mongoClient.connect();
-    db = mongoClient.db("meter");
-    readingsDocument = db.collection("readings");
-  } catch (error) {
-    console.error("Error connecting to MongoDB", error);
-  }
+  await producer.connect();
+  console.log("Kafka producer connected");
 
-  // todo implement a tcp based client
+  server.on("connect", async function (socket) {
+    console.log(
+      `Client connected: ${socket.remoteAddress}:${socket.remotePort}`
+    );
 
+    socket.keepAlive = true;
+    socket.setEncoding("binary");
+
+    socket.on("data", async (data) => {
+      try {
+        const rawBuffer = Buffer.from(data, "binary");
+        const parsedData = parseTCPPacket(buffer);
+        await producer.send({
+          topic: KAFKA_TOPIC,
+          messages: [{ value: JSON.stringify(parsedData) }],
+        });
+      } catch (error) {
+        console.error("Error processing data:", error);
+      }
+    });
+
+    socket.on("end", function () {
+      console.log(
+        `Client disconnected: ${socket.remoteAddress}:${socket.remotePort}`
+      );
+    });
+  });
+
+  server.listen(4000, () => {
+    console.log("TCP Server listening on port 4000");
+  });
 }
 
-main();
+main().catch(console.error);
+
+process.on("SIGINT", async () => {
+  console.log("Shutting down TCP server");
+  server.close();
+  await producer.disconnect();
+  process.exit(0);
+});
