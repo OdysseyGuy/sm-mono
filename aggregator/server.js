@@ -1,25 +1,24 @@
 const mqtt = require("mqtt");
 const { MongoClient } = require("mongodb");
-const mongoose = require('mongoose');
-// const firebase = require("firebase-admin");
-// const fs = require("fs");
 
-const protocol = "mqtt";
-const host = "broker.emqx.io";
-const port = "1883";
-const clientId = `mqtt_${Math.random().toString(16).slice(3)}`;
-const connectUrl = `${protocol}://${host}:${port}`;
+// constants
+const MQTT_BROKER_PROTOCOL = "mqtt";
+const MQTT_BROKER_HOST = "broker.emqx.io";
+const MQTT_BROKER_PORT = "1883";
+const MQTT_BROKER_CLIENTID = `mqtt_${Math.random().toString(16).slice(3)}`;
+const MQTT_BROKER_CONNECT_URL = `${MQTT_BROKER_PROTOCOL}://${MQTT_BROKER_HOST}:${MQTT_BROKER_PORT}`;
+const MONGODB_URI = "mongodb://127.0.0.1:27017";
 
-// let firestore;
-let client;
 let db;
-let readingsDoc;
-
-const uri = "mongodb://127.0.0.1:27017";
-const mongoClient = new MongoClient(uri);
+let readingsDocument;
 
 function onMqttMessage(topic, message) {
+  // log to console that we received a message
+  // this is just for debugging purposes
+  // We can remove this line in production
   console.log("Received message from MQTT Broker", topic);
+
+  // process the message
   let strMessage = message.toString();
   let objMessage = JSON.parse(strMessage);
 
@@ -42,59 +41,24 @@ function onMqttMessage(topic, message) {
     powerFactor: parseFloat(objMessage["powerFactor"]),
   };
 
-  readingsDoc.insertOne(reading);
+  // TODO: handle error if insert fails
+  readingsDocument.insertOne(reading);
 }
 
 async function main() {
+  // first connect to mongodb database
+  // TODO: handle error if connection fails
+  const mongoClient = new MongoClient(MONGODB_URI);
   try {
     await mongoClient.connect();
     db = mongoClient.db("meter");
-    readingsDoc = db.collection("readings");
+    readingsDocument = db.collection("readings");
   } catch (error) {
     console.error("Error connecting to MongoDB", error);
   }
 
-  client = mqtt.connect(connectUrl, {
-    clientId,
-    clean: true,
-    connectTimeout: 4000,
-    reconnectPeriod: 1000,
-  });
+  // todo implement a tcp based client
 
-  // topic to subscribe to
-  let topic = "meter/#";
-
-  client.on("connect", function () {
-    console.log("Connected to MQTT Broker");
-    client.subscribe(topic, function (error) {
-      if (error) {
-        console.error("Error subscribing to topic", error);
-      } else {
-        console.log("Subscribed to topic", topic);
-      }
-    });
-  });
-
-  client.on("reconnect", function (error) {
-    console.error("Reconnecting to MQTT Broker");
-    if (error) {
-      console.error("Error", error);
-    }
-  });
-
-  client.on("message", onMqttMessage);
-
-  client.on("close", function () {
-    console.log("Disconnected from MQTT Broker");
-  });
-
-  client.on("offline", function () {
-    console.log("MQTT Broker is offline");
-  });
-
-  client.on("error", function (error) {
-    console.error(error);
-  });
 }
 
 main();
