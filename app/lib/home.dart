@@ -1,3 +1,4 @@
+import 'package:app/readings.dart';
 import 'package:flutter/material.dart';
 
 class HomePage extends StatefulWidget {
@@ -25,6 +26,20 @@ class _HomePageState extends State<HomePage> {
               decoration: const InputDecoration(
                 label: Text('Meter ID'),
               ),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final meterId = _meterIdController.text;
+                if (meterId.isNotEmpty) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ReadingsPage(meterId: meterId),
+                    ),
+                  );
+                }
+              },
+              child: const Text("Connect"),
             )
           ],
         ),
